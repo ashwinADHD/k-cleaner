@@ -16,6 +16,7 @@ Inspired by [Pearcleaner](https://github.com/alienator88/Pearcleaner) and CleanM
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System framework, layers, and data flow |
 | [docs/CLI.md](docs/CLI.md) | Full command reference |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phased delivery plan |
+| [docs/WORKFLOW.md](docs/WORKFLOW.md) | Git workflow (`feat/*` → `main`) |
 
 ## Features
 
