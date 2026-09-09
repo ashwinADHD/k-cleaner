@@ -1,0 +1,5 @@
+kclean
+K-Cleaner.app
+build/
+*.test
+.DS_Store
