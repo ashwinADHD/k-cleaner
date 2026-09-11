@@ -7,6 +7,7 @@ import (
 
 	"github.com/ashwinADHD/k-cleaner/internal/appinfo"
 	"github.com/ashwinADHD/k-cleaner/internal/conditions"
+	"github.com/ashwinADHD/k-cleaner/internal/config"
 	"github.com/ashwinADHD/k-cleaner/internal/match"
 	"github.com/ashwinADHD/k-cleaner/internal/models"
 	"github.com/ashwinADHD/k-cleaner/internal/paths"
@@ -16,10 +17,12 @@ import (
 type ForwardScanner struct {
 	App         *models.AppInfo
 	Sensitivity models.Sensitivity
+	Exclusions  *config.Exclusions
+	Spotlight   *SpotlightSearcher
 }
 
 func NewForwardScanner(app *models.AppInfo, level models.Sensitivity) *ForwardScanner {
-	return &ForwardScanner{App: app, Sensitivity: level}
+	return &ForwardScanner{App: app, Sensitivity: level, Spotlight: &SpotlightSearcher{}}
 }
 
 func (f *ForwardScanner) FindRelated() []models.Item {
@@ -32,11 +35,33 @@ func (f *ForwardScanner) FindRelated() []models.Item {
 		f.scanLocation(root, found)
 	}
 
-	// Resolve sandbox containers by metadata plist.
 	f.scanContainers(found)
+	f.scanSpotlight(found)
 
-	items := dedupeParents(found)
+	items := DedupeParentPaths(found)
+	if f.Exclusions != nil {
+		items = f.Exclusions.FilterItems(items)
+	}
 	return items
+}
+
+func (f *ForwardScanner) scanSpotlight(found map[string]models.Item) {
+	if f.Spotlight == nil || f.App == nil {
+		return
+	}
+	for _, p := range f.Spotlight.find(f.App, f.Sensitivity) {
+		if f.Exclusions != nil && f.Exclusions.IsExcluded(p) {
+			continue
+		}
+		name := filepath.Base(p)
+		if !f.matchesItem(name, p) {
+			continue
+		}
+		item, ok := makeItem(p, models.CategoryAppRelated, "Spotlight: related to "+f.App.Name)
+		if ok {
+			found[p] = item
+		}
+	}
 }
 
 func (f *ForwardScanner) scanLocation(root string, found map[string]models.Item) {
@@ -140,26 +165,4 @@ func makeItem(path string, cat models.Category, reason string) (models.Item, boo
 	return models.Item{
 		Path: path, Size: size, Category: cat, Reason: reason, ModifiedAt: info.ModTime(),
 	}, true
-}
-
-func dedupeParents(found map[string]models.Item) []models.Item {
-	paths := make([]string, 0, len(found))
-	for p := range found {
-		paths = append(paths, p)
-	}
-
-	var items []models.Item
-	for _, p := range paths {
-		skip := false
-		for _, other := range paths {
-			if p != other && strings.HasPrefix(p, other+string(os.PathSeparator)) {
-				skip = true
-				break
-			}
-		}
-		if !skip {
-			items = append(items, found[p])
-		}
-	}
-	return items
 }

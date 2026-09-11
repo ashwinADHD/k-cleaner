@@ -7,12 +7,14 @@ import (
 	"time"
 
 	"github.com/ashwinADHD/k-cleaner/internal/appindex"
+	"github.com/ashwinADHD/k-cleaner/internal/config"
 	"github.com/ashwinADHD/k-cleaner/internal/models"
 	"github.com/ashwinADHD/k-cleaner/internal/paths"
 )
 
 type Scanner struct {
-	apps *appindex.Index
+	apps       *appindex.Index
+	exclusions *config.Exclusions
 }
 
 func New() (*Scanner, error) {
@@ -20,7 +22,27 @@ func New() (*Scanner, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Scanner{apps: idx}, nil
+	ex, err := config.LoadExclusions()
+	if err != nil {
+		return nil, err
+	}
+	return &Scanner{apps: idx, exclusions: ex}, nil
+}
+
+func (s *Scanner) Exclusions() *config.Exclusions {
+	return s.exclusions
+}
+
+func (s *Scanner) filterResult(r models.ScanResult) models.ScanResult {
+	if s.exclusions == nil {
+		return r
+	}
+	r.Items = s.exclusions.FilterItems(r.Items)
+	r.TotalSize = 0
+	for _, item := range r.Items {
+		r.TotalSize += item.Size
+	}
+	return r
 }
 
 func (s *Scanner) Apps() *appindex.Index {
@@ -28,28 +50,30 @@ func (s *Scanner) Apps() *appindex.Index {
 }
 
 func (s *Scanner) ScanCategory(cat models.Category) models.ScanResult {
+	var r models.ScanResult
 	switch cat {
 	case models.CategoryBrowserCache:
-		return s.scanBrowserCache()
+		r = s.scanBrowserCache()
 	case models.CategorySystemCache:
-		return s.scanSystemCache()
+		r = s.scanSystemCache()
 	case models.CategoryLogs:
-		return s.scanLogs()
+		r = s.scanLogs()
 	case models.CategoryOrphanSupport:
-		return s.scanOrphansByCategory(models.CategoryOrphanSupport)
+		r = s.scanOrphansByCategory(models.CategoryOrphanSupport)
 	case models.CategoryOrphanPrefs:
-		return s.scanOrphansByCategory(models.CategoryOrphanPrefs)
+		r = s.scanOrphansByCategory(models.CategoryOrphanPrefs)
 	case models.CategoryOrphanContainers:
-		return s.scanOrphansByCategory(models.CategoryOrphanContainers)
+		r = s.scanOrphansByCategory(models.CategoryOrphanContainers)
 	case models.CategoryOrphanSavedState:
-		return s.scanOrphansByCategory(models.CategoryOrphanSavedState)
+		r = s.scanOrphansByCategory(models.CategoryOrphanSavedState)
 	case models.CategoryOrphanLaunchAgents:
-		return s.scanOrphansByCategory(models.CategoryOrphanLaunchAgents)
+		r = s.scanOrphansByCategory(models.CategoryOrphanLaunchAgents)
 	case models.CategoryTrash:
-		return s.scanTrash()
+		r = s.scanTrash()
 	default:
 		return models.ScanResult{Category: cat}
 	}
+	return s.filterResult(r)
 }
 
 func (s *Scanner) ScanAll() []models.ScanResult {
@@ -61,21 +85,21 @@ func (s *Scanner) ScanAll() []models.ScanResult {
 }
 
 func (s *Scanner) ScanOrphans(level models.Sensitivity) models.ScanResult {
-	rs := NewReverseScanner(s.apps, level)
+	rs := &ReverseScanner{Apps: s.apps, Sensitivity: level, Exclusions: s.exclusions}
 	items := rs.FindOrphans()
 	var total int64
 	for _, item := range items {
 		total += item.Size
 	}
 	return models.ScanResult{
-		Category: models.CategoryOrphanSupport,
-		Items:    items,
+		Category:  models.CategoryOrphanSupport,
+		Items:     items,
 		TotalSize: total,
 	}
 }
 
 func (s *Scanner) scanOrphansByCategory(want models.Category) models.ScanResult {
-	rs := NewReverseScanner(s.apps, models.SensitivityEnhanced)
+	rs := &ReverseScanner{Apps: s.apps, Sensitivity: models.SensitivityEnhanced, Exclusions: s.exclusions}
 	all := rs.FindOrphans()
 	var items []models.Item
 	var total int64

@@ -17,6 +17,7 @@ Inspired by [Pearcleaner](https://github.com/alienator88/Pearcleaner) and CleanM
 | [docs/CLI.md](docs/CLI.md) | Full command reference |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phased delivery plan |
 | [docs/WORKFLOW.md](docs/WORKFLOW.md) | Git workflow (`feat/*` → `main`) |
+| [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md) | Code signing and notarization guide |
 
 ## Features
 
@@ -96,7 +97,17 @@ kclean uninstall-all /Applications/MyApp.app --yes
 
 # Orphan management
 kclean list-orphaned --verbose
+kclean list-orphaned --json
 kclean remove-orphaned --yes
+
+# User exclusions (skip paths during scan/clean)
+kclean exclusions list
+kclean exclusions add ~/Library/Caches/com.example.app
+kclean exclusions remove ~/Library/Caches/com.example.app
+
+# JSON output for scripting
+kclean scan --json --verbose
+kclean clean --all --dry-run --json
 
 # Permissions
 kclean permissions
