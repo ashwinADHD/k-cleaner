@@ -31,13 +31,13 @@ Phased delivery plan aligned with Pearcleaner capabilities and K-Cleaner scope d
 
 ---
 
-## Phase 3 — Pearcleaner Parity Modules
+## Phase 3 — Pearcleaner Parity Modules ✅ (v1.2.0)
 
-- [ ] Homebrew cache and formula cleanup (`brew cleanup` wrapper)
-- [ ] Developer environment caches (npm, cargo, pip, Gradle, Xcode simulators)
-- [ ] Launch daemon / privileged helper tool scanner (read-only first)
-- [ ] PKG receipt and BOM parsing
-- [ ] GUI uninstall tab (pick app → list related → clean)
+- [ ] ~~Homebrew cache and formula cleanup~~ — **Out of scope** (not used)
+- [x] Developer environment caches (npm, cargo, pip, Gradle, Xcode simulators)
+- [x] Launch daemon / privileged helper tool scanner (read-only)
+- [x] PKG receipt and BOM parsing (read-only via `lsbom`)
+- [x] GUI uninstall tab (pick app → list related → clean)
 
 ---
 
@@ -55,3 +55,4 @@ Phased delivery plan aligned with Pearcleaner capabilities and K-Cleaner scope d
 - Cloud sync or telemetry
 - Paid subscription model
 - Permanent secure erase / DoD wipe
+- Homebrew integration

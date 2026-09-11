@@ -9,6 +9,7 @@ import (
 	"github.com/ashwinADHD/k-cleaner/internal/appindex"
 	"github.com/ashwinADHD/k-cleaner/internal/config"
 	"github.com/ashwinADHD/k-cleaner/internal/models"
+	"github.com/ashwinADHD/k-cleaner/internal/modules/dev"
 	"github.com/ashwinADHD/k-cleaner/internal/paths"
 )
 
@@ -70,6 +71,8 @@ func (s *Scanner) ScanCategory(cat models.Category) models.ScanResult {
 		r = s.scanOrphansByCategory(models.CategoryOrphanLaunchAgents)
 	case models.CategoryTrash:
 		r = s.scanTrash()
+	case models.CategoryDevCaches:
+		r = s.scanDevCaches()
 	default:
 		return models.ScanResult{Category: cat}
 	}
@@ -181,6 +184,17 @@ func (s *Scanner) scanTrash() models.ScanResult {
 		result.TotalSize += item.Size
 	}
 	return result
+}
+
+func (s *Scanner) scanDevCaches() models.ScanResult {
+	items := dev.Scan()
+	var total int64
+	for _, item := range items {
+		total += item.Size
+	}
+	return models.ScanResult{
+		Category: models.CategoryDevCaches, Items: items, TotalSize: total,
+	}
 }
 
 func dirItem(path string, cat models.Category, reason string) (models.Item, bool) {

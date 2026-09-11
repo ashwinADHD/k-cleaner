@@ -15,6 +15,7 @@ const (
 	CategoryOrphanLaunchAgents Category = "orphan-launch-agents"
 	CategoryTrash              Category = "trash"
 	CategoryAppRelated         Category = "app-related"
+	CategoryDevCaches          Category = "dev-caches"
 )
 
 func AllCategories() []Category {
@@ -27,6 +28,7 @@ func AllCategories() []Category {
 		CategoryOrphanContainers,
 		CategoryOrphanSavedState,
 		CategoryOrphanLaunchAgents,
+		CategoryDevCaches,
 		CategoryTrash,
 	}
 }
@@ -53,6 +55,8 @@ func (c Category) Label() string {
 		return "Trash"
 	case CategoryAppRelated:
 		return "Application Files"
+	case CategoryDevCaches:
+		return "Developer Caches"
 	default:
 		return string(c)
 	}
@@ -80,6 +84,8 @@ func (c Category) Description() string {
 		return "Items currently in the Trash"
 	case CategoryAppRelated:
 		return "Files related to the selected application"
+	case CategoryDevCaches:
+		return "Caches from npm, cargo, pip, Gradle, Xcode, and other developer tools"
 	default:
 		return ""
 	}

@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/ashwinADHD/k-cleaner/internal/appinfo"
@@ -123,4 +124,14 @@ func (idx *Index) HasAppName(name string) bool {
 
 func (idx *Index) Identifiers() []match.AppIdentifiers {
 	return idx.Formatted
+}
+
+// InstalledApps returns user-facing apps sorted by name (excludes system-only entries).
+func (idx *Index) InstalledApps() []models.AppInfo {
+	apps := make([]models.AppInfo, len(idx.Apps))
+	copy(apps, idx.Apps)
+	sort.Slice(apps, func(i, j int) bool {
+		return strings.ToLower(apps[i].Name) < strings.ToLower(apps[j].Name)
+	})
+	return apps
 }

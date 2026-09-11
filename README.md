@@ -28,6 +28,9 @@ Inspired by [Pearcleaner](https://github.com/alienator88/Pearcleaner) and CleanM
 | **Application Logs** | `~/Library/Logs` |
 | **Orphan Detection** | Leftovers from uninstalled apps (reverse scan) |
 | **App Uninstall** | `.app` bundle + related prefs, caches, containers |
+| **Developer Caches** | npm, cargo, pip, Gradle, Xcode DerivedData, simulators |
+| **Launch Daemons** | Read-only inventory of agents/daemons (`kclean daemons list`) |
+| **PKG Receipts** | Read-only list of `.pkg` installs (`kclean pkg list`) |
 | **Trash** | Empty reclaimable space from Trash |
 
 ### Pearcleaner-inspired capabilities
