@@ -14,7 +14,8 @@ import (
 // Cleaner moves items to Trash (Pearcleaner undo-safe deletion).
 type Cleaner struct {
 	DryRun   bool
-	Bundle   string // trash subfolder name, e.g. "K-Cleaner_AppName_20250909_140000"
+	Bundle   string // trash subfolder name
+	Elevated bool   // retry permission failures with administrator privileges
 }
 
 func (c *Cleaner) CleanItems(items []models.Item) models.CleanResult {
@@ -39,6 +40,13 @@ func (c *Cleaner) CleanItems(items []models.Item) models.CleanResult {
 		}
 
 		freed, err := moveToTrash(item.Path, trashBundle)
+		if err != nil && c.Elevated && isPermissionError(err) {
+			if err2 := elevatedMoveToTrash(item.Path, trashBundle); err2 == nil {
+				result.Deleted++
+				result.BytesFreed += item.Size
+				continue
+			}
+		}
 		if err != nil {
 			result.Failed++
 			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", item.Path, err))

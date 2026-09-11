@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/ashwinADHD/k-cleaner/internal/appinfo"
+	"github.com/ashwinADHD/k-cleaner/internal/automation/schedule"
+	"github.com/ashwinADHD/k-cleaner/internal/automation/sentinel"
 	"github.com/ashwinADHD/k-cleaner/internal/browser"
 	"github.com/ashwinADHD/k-cleaner/internal/clean"
 	"github.com/ashwinADHD/k-cleaner/internal/config"
@@ -21,7 +23,7 @@ import (
 	"github.com/ashwinADHD/k-cleaner/internal/scan"
 )
 
-const version = "1.2.0"
+const version = "1.3.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -52,6 +54,10 @@ func main() {
 		runDaemons(os.Args[2:])
 	case "pkg":
 		runPkg(os.Args[2:])
+	case "sentinel":
+		runSentinel(os.Args[2:])
+	case "schedule":
+		runSchedule(os.Args[2:])
 	case "gui", "ui":
 		gui.Run()
 	case "categories":
@@ -87,6 +93,8 @@ Usage:
   kclean exclusions list|add|remove     Manage user exclusion paths
   kclean daemons list [--json]          List launch agents/daemons (read-only)
   kclean pkg list [--json]              List .pkg install receipts (read-only)
+  kclean sentinel install|status|run    Trash watcher for trashed .app bundles
+  kclean schedule install|status|run    Scheduled scan via launchd
   kclean categories                     List cleanup categories
   kclean version                        Show version
 
@@ -96,6 +104,7 @@ Clean options:
   --dry-run                             Preview without moving files
   --yes, -y                             Skip confirmation prompt
   --json                                Output results as JSON
+  --elevated                            Retry permission failures with admin password
 
 App / orphan options:
   --sensitivity strict|enhanced|deep    Match sensitivity (default: enhanced)
@@ -145,6 +154,7 @@ func runClean(args []string) {
 	yesShort := fs.Bool("y", false, "Skip confirmation")
 	categories := fs.String("category", "", "Category to clean (comma-separated)")
 	asJSON := fs.Bool("json", false, "Output as JSON")
+	elevated := fs.Bool("elevated", false, "Use admin privileges for protected files")
 	_ = fs.Parse(args)
 
 	skipConfirm := *yes || *yesShort
@@ -205,7 +215,7 @@ func runClean(args []string) {
 		return
 	}
 
-	cl := &clean.Cleaner{DryRun: *dryRun}
+	cl := &clean.Cleaner{DryRun: *dryRun, Elevated: *elevated}
 	var cleanResults []models.CleanResult
 	for _, sr := range scanResults {
 		if len(sr.Items) == 0 {
@@ -265,6 +275,7 @@ func runUninstall(args []string, includeRelated bool) {
 	sensitivity := fs.String("sensitivity", "enhanced", "Match sensitivity")
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Preview only")
+	elevated := fs.Bool("elevated", false, "Use admin privileges for protected files")
 	_ = fs.Parse(args)
 
 	if fs.NArg() < 1 {
@@ -312,7 +323,7 @@ func runUninstall(args []string, includeRelated bool) {
 	}
 
 	bundle := fmt.Sprintf("K-Cleaner_%s", strings.ReplaceAll(app.Name, " ", "_"))
-	cl := &clean.Cleaner{DryRun: *dryRun, Bundle: bundle}
+	cl := &clean.Cleaner{DryRun: *dryRun, Bundle: bundle, Elevated: *elevated}
 	cr := cl.CleanItems(allItems)
 	cr.Category = models.CategoryAppRelated
 	report.PrintCleanSummary(os.Stdout, []models.CleanResult{cr}, *dryRun)
@@ -520,6 +531,96 @@ func runPkg(args []string) {
 			fmt.Fprintf(os.Stdout, "    BOM files: %d\n", p.FileCount)
 		}
 		fmt.Fprintf(os.Stdout, "    %s\n\n", report.ShortenPath(p.ReceiptPath))
+	}
+}
+
+func runSentinel(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: kclean sentinel install|uninstall|status|run")
+		os.Exit(1)
+	}
+	switch args[0] {
+	case "install":
+		if err := sentinel.Install(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Sentinel installed — watches Trash for trashed .app bundles.")
+		fmt.Println("Logs: ~/Library/Logs/K-Cleaner/sentinel.log")
+	case "uninstall":
+		if err := sentinel.Uninstall(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Sentinel uninstalled.")
+	case "status":
+		installed, running, path := sentinel.Status()
+		fmt.Println("K-Cleaner Sentinel")
+		fmt.Printf("  Installed: %v\n", installed)
+		fmt.Printf("  Running:   %v\n", running)
+		if installed {
+			fmt.Printf("  Plist:     %s\n", report.ShortenPath(path))
+		}
+	case "run":
+		fmt.Fprintln(os.Stderr, "Watching Trash for .app bundles (Ctrl+C to stop)…")
+		if err := sentinel.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown sentinel command: %s\n", args[0])
+		os.Exit(1)
+	}
+}
+
+func runSchedule(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: kclean schedule install|uninstall|status|run [--daily|--weekly]")
+		os.Exit(1)
+	}
+
+	fs := flag.NewFlagSet("schedule", flag.ExitOnError)
+	daily := fs.Bool("daily", false, "Daily at 9:00 AM")
+	weekly := fs.Bool("weekly", true, "Weekly on Sunday at 9:00 AM")
+	_ = fs.Parse(args[1:])
+
+	switch args[0] {
+	case "install":
+		interval := schedule.Weekly
+		if *daily {
+			interval = schedule.Daily
+		} else if *weekly {
+			interval = schedule.Weekly
+		}
+		if err := schedule.Install(interval); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Scheduled scan installed (%s at 9:00 AM).\n", interval)
+		fmt.Println("Logs: ~/Library/Logs/K-Cleaner/schedule.log")
+	case "uninstall":
+		if err := schedule.Uninstall(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Scheduled scan uninstalled.")
+	case "status":
+		installed, running, path := schedule.Status()
+		fmt.Println("K-Cleaner Scheduled Scan")
+		fmt.Printf("  Installed: %v\n", installed)
+		fmt.Printf("  Running:   %v\n", running)
+		if installed {
+			fmt.Printf("  Plist:     %s\n", report.ShortenPath(path))
+		}
+	case "run":
+		if err := schedule.Run(schedule.DefaultNotifyThreshold); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Scheduled scan complete — see ~/Library/Logs/K-Cleaner/")
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown schedule command: %s\n", args[0])
+		os.Exit(1)
 	}
 }
 

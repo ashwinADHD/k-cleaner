@@ -182,7 +182,10 @@ Candidate modules (ROADMAP):
 | Homebrew cleanup | `internal/modules/brew` |
 | Developer caches (npm, cargo, Xcode) | `internal/modules/dev` |
 | PKG receipt uninstall | `internal/modules/pkg` |
-| Trash Sentinel watcher | `cmd/kclean-sentinel` |
+| Trash Sentinel watcher | `internal/automation/sentinel` |
+| Scheduled scan | `internal/automation/schedule` |
+| LaunchAgent helpers | `internal/automation/launchd` |
+| macOS notifications | `internal/automation/notify` |
 
 Register modules in `Scanner.ScanAll()` when ready.
 

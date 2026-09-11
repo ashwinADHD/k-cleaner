@@ -18,6 +18,7 @@ Inspired by [Pearcleaner](https://github.com/alienator88/Pearcleaner) and CleanM
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phased delivery plan |
 | [docs/WORKFLOW.md](docs/WORKFLOW.md) | Git workflow (`feat/*` → `main`) |
 | [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md) | Code signing and notarization guide |
+| [docs/AUTOMATION.md](docs/AUTOMATION.md) | Sentinel, scheduled scans, elevated clean |
 
 ## Features
 
@@ -143,6 +144,21 @@ For complete container and sandbox scanning:
 3. Restart the app
 
 Run `kclean permissions` to check status.
+
+## Automation (Phase 4)
+
+```bash
+# Watch Trash — notify when apps are trashed
+kclean sentinel install
+
+# Weekly scan summary (Sundays 9 AM)
+kclean schedule install --weekly
+
+# Clean protected system paths (admin password prompt)
+kclean clean --all --elevated --dry-run
+```
+
+See [docs/AUTOMATION.md](docs/AUTOMATION.md) for details.
 
 ## License
 

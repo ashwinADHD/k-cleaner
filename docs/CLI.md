@@ -32,8 +32,8 @@ Scans all categories and prints reclaimable space summary.
 ### Clean
 
 ```bash
-kclean clean --all [--dry-run] [--yes]
-kclean clean --category browser-cache,system-cache [--dry-run] [--yes]
+kclean clean --all [--dry-run] [--yes] [--elevated]
+kclean clean --category browser-cache,system-cache [--dry-run] [--yes] [--elevated]
 ```
 
 Moves matched items to Trash. Requires `--all` or `--category`.
@@ -53,13 +53,13 @@ kclean list /Applications/MyApp.app [--sensitivity enhanced] [--verbose]
 ### Uninstall app bundle only
 
 ```bash
-kclean uninstall /Applications/MyApp.app [--yes] [--dry-run]
+kclean uninstall /Applications/MyApp.app [--yes] [--dry-run] [--elevated]
 ```
 
 ### Uninstall app + all related files
 
 ```bash
-kclean uninstall-all /Applications/MyApp.app [--yes] [--dry-run] [--sensitivity enhanced]
+kclean uninstall-all /Applications/MyApp.app [--yes] [--dry-run] [--sensitivity enhanced] [--elevated]
 ```
 
 **Sensitivity:** `strict` | `enhanced` (default) | `deep`
@@ -75,6 +75,17 @@ kclean remove-orphaned [--yes] [--dry-run] [--sensitivity enhanced]
 
 ---
 
+## Automation (Phase 4)
+
+```bash
+kclean sentinel install|uninstall|status|run
+kclean schedule install [--daily|--weekly]|uninstall|status|run
+```
+
+See [AUTOMATION.md](AUTOMATION.md) for behavior and logs.
+
+---
+
 ## Flags
 
 | Flag | Commands | Description |
@@ -84,7 +95,7 @@ kclean remove-orphaned [--yes] [--dry-run] [--sensitivity enhanced]
 | `--yes`, `-y` | clean, uninstall*, remove-orphaned | Skip confirmation prompt |
 | `--sensitivity` | list, uninstall*, list-orphaned, remove-orphaned | Match strictness |
 | `--all` | clean | All categories |
-| `--category` | clean | Comma-separated categories |
+| `--elevated` | clean, uninstall* | Retry permission failures with admin password |
 
 ---
 
