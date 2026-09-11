@@ -20,14 +20,14 @@ Phased delivery plan aligned with Pearcleaner capabilities and K-Cleaner scope d
 
 ---
 
-## Phase 2 — Robustness
+## Phase 2 — Robustness ✅ (v1.1.0)
 
-- [ ] Integration tests with fixture Library trees
-- [ ] Spotlight supplement via `mdfind` for forward scan gaps
-- [ ] Parent-path deduplication improvements
-- [ ] Exclusion list persistence (user-defined skip paths)
-- [ ] `--json` output flag for scripting
-- [ ] Code signing + notarization guide
+- [x] Integration tests with fixture Library trees
+- [x] Spotlight supplement via `mdfind` for forward scan gaps
+- [x] Parent-path deduplication improvements
+- [x] Exclusion list persistence (user-defined skip paths)
+- [x] `--json` output flag for scripting
+- [x] Code signing + notarization guide
 
 ---
 

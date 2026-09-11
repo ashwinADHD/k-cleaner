@@ -10,6 +10,7 @@ import (
 	"github.com/ashwinADHD/k-cleaner/internal/appinfo"
 	"github.com/ashwinADHD/k-cleaner/internal/browser"
 	"github.com/ashwinADHD/k-cleaner/internal/clean"
+	"github.com/ashwinADHD/k-cleaner/internal/config"
 	"github.com/ashwinADHD/k-cleaner/internal/gui"
 	"github.com/ashwinADHD/k-cleaner/internal/models"
 	"github.com/ashwinADHD/k-cleaner/internal/permissions"
@@ -17,7 +18,7 @@ import (
 	"github.com/ashwinADHD/k-cleaner/internal/scan"
 )
 
-const version = "1.0.0"
+const version = "1.1.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -42,6 +43,8 @@ func main() {
 		runRemoveOrphaned(os.Args[2:])
 	case "permissions":
 		runPermissions()
+	case "exclusions":
+		runExclusions(os.Args[2:])
 	case "gui", "ui":
 		gui.Run()
 	case "categories":
@@ -74,6 +77,7 @@ Usage:
   kclean list-orphaned [--verbose]      List orphaned leftover files
   kclean remove-orphaned                Move orphaned files to Trash
   kclean permissions                    Check Full Disk Access
+  kclean exclusions list|add|remove     Manage user exclusion paths
   kclean categories                     List cleanup categories
   kclean version                        Show version
 
@@ -82,10 +86,12 @@ Clean options:
   --category <name>                     Clean one category (comma-separated)
   --dry-run                             Preview without moving files
   --yes, -y                             Skip confirmation prompt
+  --json                                Output results as JSON
 
 App / orphan options:
   --sensitivity strict|enhanced|deep    Match sensitivity (default: enhanced)
   --yes, -y                             Skip confirmation
+  --json                                Output results as JSON
 
 Examples:
   kclean scan --verbose
@@ -101,6 +107,7 @@ Examples:
 func runScan(args []string) {
 	fs := flag.NewFlagSet("scan", flag.ExitOnError)
 	verbose := fs.Bool("verbose", false, "Show individual items")
+	asJSON := fs.Bool("json", false, "Output as JSON")
 	_ = fs.Parse(args)
 
 	sc, err := scan.New()
@@ -111,6 +118,13 @@ func runScan(args []string) {
 
 	fmt.Fprintln(os.Stderr, "Scanning your Mac…")
 	results := sc.ScanAll()
+	if *asJSON {
+		if err := report.WriteScanJSON(os.Stdout, results, *verbose); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing JSON: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	report.PrintScanSummary(os.Stdout, results, *verbose)
 }
 
@@ -121,6 +135,7 @@ func runClean(args []string) {
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	yesShort := fs.Bool("y", false, "Skip confirmation")
 	categories := fs.String("category", "", "Category to clean (comma-separated)")
+	asJSON := fs.Bool("json", false, "Output as JSON")
 	_ = fs.Parse(args)
 
 	skipConfirm := *yes || *yesShort
@@ -166,14 +181,18 @@ func runClean(args []string) {
 	if affected := browser.AffectedBrowsers(allItems); len(affected) > 0 && !*dryRun {
 		fmt.Fprintf(os.Stderr, "\n  WARNING: %s\n", browser.WarningMessage(affected))
 		if !confirm(skipConfirm, "Continue anyway?") {
-			fmt.Fprint(os.Stdout, "\n  Cancelled.\n")
+			if !*asJSON {
+				fmt.Fprint(os.Stdout, "\n  Cancelled.\n")
+			}
 			return
 		}
 	}
 
 	msg := fmt.Sprintf("Move %d items to Trash (%s)?", len(allItems), report.FormatBytes(totalSize))
 	if !confirm(skipConfirm || *dryRun, msg) {
-		fmt.Fprint(os.Stdout, "\n  Cancelled.\n")
+		if !*asJSON {
+			fmt.Fprint(os.Stdout, "\n  Cancelled.\n")
+		}
 		return
 	}
 
@@ -187,6 +206,10 @@ func runClean(args []string) {
 		cr.Category = sr.Category
 		cleanResults = append(cleanResults, cr)
 	}
+	if *asJSON {
+		_ = report.WriteCleanJSON(os.Stdout, cleanResults, *dryRun)
+		return
+	}
 	report.PrintCleanSummary(os.Stdout, cleanResults, *dryRun)
 }
 
@@ -194,6 +217,7 @@ func runList(args []string) {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 	sensitivity := fs.String("sensitivity", "enhanced", "Match sensitivity: strict, enhanced, deep")
 	verbose := fs.Bool("verbose", true, "Show all paths")
+	asJSON := fs.Bool("json", false, "Output as JSON")
 	_ = fs.Parse(args)
 
 	if fs.NArg() < 1 {
@@ -209,6 +233,9 @@ func runList(args []string) {
 
 	level := models.ParseSensitivity(*sensitivity)
 	finder := scan.NewForwardScanner(app, level)
+	if ex, err := config.LoadExclusions(); err == nil {
+		finder.Exclusions = ex
+	}
 	items := finder.FindRelated()
 
 	// Include the app bundle itself.
@@ -216,7 +243,12 @@ func runList(args []string) {
 		items = append([]models.Item{appItem}, items...)
 	}
 
-	report.PrintItemList(os.Stdout, fmt.Sprintf("Files for %s (%s)", app.Name, app.BundleID), items, *verbose)
+	title := fmt.Sprintf("Files for %s (%s)", app.Name, app.BundleID)
+	if *asJSON {
+		_ = report.WriteItemListJSON(os.Stdout, title, items)
+		return
+	}
+	report.PrintItemList(os.Stdout, title, items, *verbose)
 }
 
 func runUninstall(args []string, includeRelated bool) {
@@ -241,6 +273,9 @@ func runUninstall(args []string, includeRelated bool) {
 	if includeRelated {
 		level := models.ParseSensitivity(*sensitivity)
 		finder := scan.NewForwardScanner(app, level)
+		if ex, err := config.LoadExclusions(); err == nil {
+			finder.Exclusions = ex
+		}
 		items = finder.FindRelated()
 	}
 
@@ -278,6 +313,7 @@ func runListOrphaned(args []string) {
 	fs := flag.NewFlagSet("list-orphaned", flag.ExitOnError)
 	sensitivity := fs.String("sensitivity", "enhanced", "Match sensitivity")
 	verbose := fs.Bool("verbose", false, "Show all paths")
+	asJSON := fs.Bool("json", false, "Output as JSON")
 	_ = fs.Parse(args)
 
 	sc, err := scan.New()
@@ -288,6 +324,10 @@ func runListOrphaned(args []string) {
 
 	level := models.ParseSensitivity(*sensitivity)
 	result := sc.ScanOrphans(level)
+	if *asJSON {
+		_ = report.WriteItemListJSON(os.Stdout, "Orphaned Files", result.Items)
+		return
+	}
 	report.PrintItemList(os.Stdout, "Orphaned Files", result.Items, *verbose)
 }
 
@@ -330,6 +370,54 @@ func runPermissions() {
 	report.PrintPermissions(os.Stdout, st.FullDiskAccess, st.Details)
 	if !st.FullDiskAccess {
 		fmt.Fprintln(os.Stdout, permissions.FDAInstructions())
+	}
+}
+
+func runExclusions(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: kclean exclusions list|add <path>|remove <path>")
+		os.Exit(1)
+	}
+
+	ex, err := config.LoadExclusions()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading exclusions: %v\n", err)
+		os.Exit(1)
+	}
+
+	switch args[0] {
+	case "list":
+		fmt.Printf("Exclusion file: %s\n\n", ex.FilePath())
+		if len(ex.Paths) == 0 {
+			fmt.Println("  (no exclusions configured)")
+			return
+		}
+		for _, p := range ex.Paths {
+			fmt.Printf("  %s\n", report.ShortenPath(p))
+		}
+	case "add":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "Usage: kclean exclusions add <path>")
+			os.Exit(1)
+		}
+		if err := ex.Add(args[1]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Added exclusion: %s\n", report.ShortenPath(args[1]))
+	case "remove":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "Usage: kclean exclusions remove <path>")
+			os.Exit(1)
+		}
+		if err := ex.Remove(args[1]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Removed exclusion: %s\n", report.ShortenPath(args[1]))
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown exclusions command: %s\n", args[0])
+		os.Exit(1)
 	}
 }
 

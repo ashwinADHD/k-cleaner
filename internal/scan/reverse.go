@@ -8,6 +8,7 @@ import (
 	"github.com/ashwinADHD/k-cleaner/internal/appindex"
 	"github.com/ashwinADHD/k-cleaner/internal/appinfo"
 	"github.com/ashwinADHD/k-cleaner/internal/conditions"
+	"github.com/ashwinADHD/k-cleaner/internal/config"
 	"github.com/ashwinADHD/k-cleaner/internal/match"
 	"github.com/ashwinADHD/k-cleaner/internal/models"
 	"github.com/ashwinADHD/k-cleaner/internal/paths"
@@ -17,6 +18,7 @@ import (
 type ReverseScanner struct {
 	Apps        *appindex.Index
 	Sensitivity models.Sensitivity
+	Exclusions  *config.Exclusions
 }
 
 func NewReverseScanner(apps *appindex.Index, level models.Sensitivity) *ReverseScanner {
@@ -44,6 +46,10 @@ func (r *ReverseScanner) FindOrphans() []models.Item {
 			fullPath := filepath.Join(location, name)
 
 			if seen[fullPath] {
+				continue
+			}
+
+			if r.Exclusions != nil && r.Exclusions.IsExcluded(fullPath) {
 				continue
 			}
 
