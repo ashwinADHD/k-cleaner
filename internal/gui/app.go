@@ -100,12 +100,22 @@ func (ui *App) build() {
 
 	toolbar := container.NewHBox(ui.scanBtn, ui.cleanBtn, widget.NewSeparator(), ui.selectAll)
 
-	content := container.NewBorder(
+	cleanupTab := container.NewBorder(
 		container.NewVBox(ui.summary, ui.warning, widget.NewSeparator()),
-		container.NewVBox(widget.NewSeparator(), ui.progress, ui.status, widget.NewSeparator(), toolbar),
+		toolbar,
 		nil, nil, scroll,
 	)
-	ui.window.SetContent(content)
+
+	tabs := container.NewAppTabs(
+		container.NewTabItem("Cleanup", cleanupTab),
+		container.NewTabItem("Uninstall", ui.buildUninstallTab()),
+	)
+
+	footer := container.NewVBox(
+		widget.NewSeparator(), ui.progress, ui.status,
+	)
+
+	ui.window.SetContent(container.NewBorder(nil, footer, nil, nil, tabs))
 }
 
 func (ui *App) setBusy(busy bool, status string) {

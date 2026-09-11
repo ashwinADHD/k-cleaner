@@ -122,6 +122,24 @@ func isSafePath(target string) bool {
 	if strings.HasPrefix(abs, filepath.Join(home, ".config")+string(os.PathSeparator)) {
 		return true
 	}
+	// Developer tool caches
+	devPrefixes := []string{
+		".npm", ".cargo", ".gradle", ".m2", ".swiftpm", ".cursor", ".cache", ".yarn-cache", "go",
+	}
+	for _, prefix := range devPrefixes {
+		p := filepath.Join(home, prefix)
+		if abs == p || strings.HasPrefix(abs, p+string(os.PathSeparator)) {
+			return true
+		}
+	}
+	devLib := filepath.Join(home, "Library", "Developer")
+	if abs == devLib || strings.HasPrefix(abs, devLib+string(os.PathSeparator)) {
+		return true
+	}
+	pnpm := filepath.Join(home, "Library", "pnpm")
+	if abs == pnpm || strings.HasPrefix(abs, pnpm+string(os.PathSeparator)) {
+		return true
+	}
 
 	return false
 }

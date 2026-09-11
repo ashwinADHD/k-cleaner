@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -13,12 +14,14 @@ import (
 	"github.com/ashwinADHD/k-cleaner/internal/config"
 	"github.com/ashwinADHD/k-cleaner/internal/gui"
 	"github.com/ashwinADHD/k-cleaner/internal/models"
+	"github.com/ashwinADHD/k-cleaner/internal/modules/daemons"
+	"github.com/ashwinADHD/k-cleaner/internal/modules/pkgscan"
 	"github.com/ashwinADHD/k-cleaner/internal/permissions"
 	"github.com/ashwinADHD/k-cleaner/internal/report"
 	"github.com/ashwinADHD/k-cleaner/internal/scan"
 )
 
-const version = "1.1.0"
+const version = "1.2.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -45,6 +48,10 @@ func main() {
 		runPermissions()
 	case "exclusions":
 		runExclusions(os.Args[2:])
+	case "daemons":
+		runDaemons(os.Args[2:])
+	case "pkg":
+		runPkg(os.Args[2:])
 	case "gui", "ui":
 		gui.Run()
 	case "categories":
@@ -78,6 +85,8 @@ Usage:
   kclean remove-orphaned                Move orphaned files to Trash
   kclean permissions                    Check Full Disk Access
   kclean exclusions list|add|remove     Manage user exclusion paths
+  kclean daemons list [--json]          List launch agents/daemons (read-only)
+  kclean pkg list [--json]              List .pkg install receipts (read-only)
   kclean categories                     List cleanup categories
   kclean version                        Show version
 
@@ -365,14 +374,6 @@ func runRemoveOrphaned(args []string) {
 	report.PrintCleanSummary(os.Stdout, []models.CleanResult{cr}, *dryRun)
 }
 
-func runPermissions() {
-	st := permissions.CheckFullDiskAccess()
-	report.PrintPermissions(os.Stdout, st.FullDiskAccess, st.Details)
-	if !st.FullDiskAccess {
-		fmt.Fprintln(os.Stdout, permissions.FDAInstructions())
-	}
-}
-
 func runExclusions(args []string) {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "Usage: kclean exclusions list|add <path>|remove <path>")
@@ -418,6 +419,107 @@ func runExclusions(args []string) {
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown exclusions command: %s\n", args[0])
 		os.Exit(1)
+	}
+}
+
+func runPermissions() {
+	st := permissions.CheckFullDiskAccess()
+	report.PrintPermissions(os.Stdout, st.FullDiskAccess, st.Details)
+	if !st.FullDiskAccess {
+		fmt.Fprintln(os.Stdout, permissions.FDAInstructions())
+	}
+}
+
+func runDaemons(args []string) {
+	fs := flag.NewFlagSet("daemons", flag.ExitOnError)
+	asJSON := fs.Bool("json", false, "Output as JSON")
+	_ = fs.Parse(args)
+
+	if fs.NArg() < 1 || fs.Arg(0) != "list" {
+		fmt.Fprintln(os.Stderr, "Usage: kclean daemons list [--json]")
+		os.Exit(1)
+	}
+
+	sc, err := scan.New()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	entries := daemons.List(sc.Apps())
+	if *asJSON {
+		type row struct {
+			Path       string `json:"path"`
+			Label      string `json:"label"`
+			Program    string `json:"program,omitempty"`
+			Scope      string `json:"scope"`
+			OrphanHint bool   `json:"orphan_hint"`
+		}
+		var rows []row
+		for _, e := range entries {
+			rows = append(rows, row{e.Path, e.Label, e.Program, e.Scope, e.OrphanHint})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(map[string]interface{}{"count": len(rows), "entries": rows})
+		return
+	}
+
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, "  K-Cleaner — Launch Agents & Daemons (read-only)")
+	fmt.Fprintln(os.Stdout, "  ─────────────────────────────────────────")
+	fmt.Fprintf(os.Stdout, "  Found %d entries\n\n", len(entries))
+	for _, e := range entries {
+		flag := ""
+		if e.OrphanHint {
+			flag = "  [possible orphan]"
+		}
+		fmt.Fprintf(os.Stdout, "  %s%s\n", e.Label, flag)
+		fmt.Fprintf(os.Stdout, "    %s · %s\n", e.Scope, report.ShortenPath(e.Path))
+		if e.Program != "" {
+			fmt.Fprintf(os.Stdout, "    Program: %s\n", e.Program)
+		}
+		fmt.Fprintln(os.Stdout, "")
+	}
+}
+
+func runPkg(args []string) {
+	fs := flag.NewFlagSet("pkg", flag.ExitOnError)
+	asJSON := fs.Bool("json", false, "Output as JSON")
+	_ = fs.Parse(args)
+
+	if fs.NArg() < 1 || fs.Arg(0) != "list" {
+		fmt.Fprintln(os.Stderr, "Usage: kclean pkg list [--json]")
+		os.Exit(1)
+	}
+
+	packages, err := pkgscan.List()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading PKG receipts: %v\n", err)
+		os.Exit(1)
+	}
+
+	if *asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(map[string]interface{}{"count": len(packages), "packages": packages})
+		return
+	}
+
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, "  K-Cleaner — PKG Install Receipts (read-only)")
+	fmt.Fprintln(os.Stdout, "  ─────────────────────────────────────────")
+	fmt.Fprintf(os.Stdout, "  Found %d packages\n\n", len(packages))
+	for _, p := range packages {
+		fmt.Fprintf(os.Stdout, "  %s", p.ID)
+		if p.Version != "" {
+			fmt.Fprintf(os.Stdout, "  v%s", p.Version)
+		}
+		fmt.Fprintln(os.Stdout, "")
+		if p.FileCount > 0 {
+			fmt.Fprintf(os.Stdout, "    BOM files: %d\n", p.FileCount)
+		}
+		fmt.Fprintf(os.Stdout, "    %s\n\n", report.ShortenPath(p.ReceiptPath))
 	}
 }
 
